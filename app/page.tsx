@@ -1,7 +1,9 @@
 "use client";
 
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { Button, Input } from "antd";
+import { useRouter } from "next/navigation";
+import { Button, Input, message } from "antd";
 import {
   PlayCircleOutlined,
   BookOutlined,
@@ -18,15 +20,54 @@ import {
   ThunderboltOutlined,
   MailOutlined,
 } from "@ant-design/icons";
+import { GoogleLogin } from "@react-oauth/google";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { useAuth } from "@/contexts/AuthContext";
+import { authService } from "@/lib/services/auth";
 
 /* ═══════════════════════════════════════════════
    HERO — Split layout: big headline left, signup right
    ═══════════════════════════════════════════════ */
 function Hero() {
+  const [email, setEmail] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
+  const { user, setUser } = useAuth();
+  const router = useRouter();
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+
+  const handleSignUp = () => {
+    const dest = email ? `/register?email=${encodeURIComponent(email)}` : "/register";
+    router.push(dest);
+  };
+
+  const handleGoogleSuccess = async (idToken: string) => {
+    setGoogleLoading(true);
+    try {
+      const loggedUser = await authService.googleSignIn(idToken);
+      setUser(loggedUser);
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Google sign-in failed";
+      messageApi.error(msg);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const triggerGoogleLogin = () => {
+    const btn = googleBtnRef.current?.querySelector<HTMLElement>('[role="button"]');
+    if (btn) btn.click();
+    else messageApi.error("Google Sign-In not ready, please try again");
+  };
+
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-indigo-50/80 via-white to-white pt-24 pb-0 lg:pt-32">
+      {contextHolder}
+
       {/* Top announcement bar */}
       <div className="absolute inset-x-0 top-16 z-10 border-b border-indigo-100 bg-indigo-600 px-4 py-2.5 text-center text-sm font-medium text-white">
         🎉 Over 10,000 learners improved their IELTS band score by 2+ points.{" "}
@@ -61,65 +102,111 @@ function Hero() {
             </div>
           </div>
 
-          {/* RIGHT — Sign Up Card */}
+          {/* RIGHT — Sign Up Card / Dashboard Card */}
           <div className="mx-auto w-full max-w-sm lg:mx-0 lg:ml-auto">
-            <div className="rounded-2xl border border-zinc-200 bg-white p-7 shadow-xl shadow-zinc-200/50">
-              <h3 className="mb-1 text-lg font-bold text-zinc-900">Start learning today</h3>
-              <p className="mb-5 text-sm text-zinc-400">Create your free account in seconds</p>
+            {user ? (
+              /* Already logged in — show dashboard CTA */
+              <div className="rounded-2xl border border-zinc-200 bg-white p-7 shadow-xl shadow-zinc-200/50">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-2xl">
+                  👋
+                </div>
+                <h3 className="mb-1 text-lg font-bold text-zinc-900">
+                  Welcome back, {user.name || user.email.split("@")[0]}!
+                </h3>
+                <p className="mb-5 text-sm text-zinc-400">
+                  Continue your learning journey from where you left off.
+                </p>
+                <Button
+                  type="primary"
+                  size="large"
+                  block
+                  onClick={() => router.push("/dashboard")}
+                  className="h-12 rounded-xl text-[15px] font-bold shadow-lg shadow-indigo-500/25"
+                >
+                  Go to Dashboard <ArrowRightOutlined />
+                </Button>
+              </div>
+            ) : (
+              /* Not logged in — show signup form */
+              <div className="rounded-2xl border border-zinc-200 bg-white p-7 shadow-xl shadow-zinc-200/50">
+                <h3 className="mb-1 text-lg font-bold text-zinc-900">Start learning today</h3>
+                <p className="mb-5 text-sm text-zinc-400">Create your free account in seconds</p>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-zinc-700">Email</label>
-                  <Input
-                    size="large"
-                    prefix={<MailOutlined className="text-zinc-400" />}
-                    placeholder="you@example.com"
-                    className="rounded-xl"
+                {/* Hidden GoogleLogin */}
+                <div
+                  ref={googleBtnRef}
+                  style={{ position: "absolute", opacity: 0, height: 0, overflow: "hidden" }}
+                >
+                  <GoogleLogin
+                    onSuccess={(cr) => {
+                      if (cr.credential) handleGoogleSuccess(cr.credential);
+                    }}
+                    onError={() => messageApi.error("Google sign-in failed")}
                   />
                 </div>
-                <Link href="/register" className="block">
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-zinc-700">Email</label>
+                    <Input
+                      size="large"
+                      prefix={<MailOutlined className="text-zinc-400" />}
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onPressEnter={handleSignUp}
+                      className="rounded-xl"
+                    />
+                  </div>
                   <Button
                     type="primary"
                     size="large"
                     block
+                    onClick={handleSignUp}
                     className="h-12 rounded-xl text-[15px] font-bold shadow-lg shadow-indigo-500/25"
                   >
                     Sign Up Free
                   </Button>
-                </Link>
-              </div>
+                </div>
 
-              <div className="mt-4 flex items-center gap-3">
-                <div className="h-px flex-1 bg-zinc-100" />
-                <span className="text-xs text-zinc-400">Or continue with</span>
-                <div className="h-px flex-1 bg-zinc-100" />
-              </div>
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-zinc-100" />
+                  <span className="text-xs text-zinc-400">Or continue with</span>
+                  <div className="h-px flex-1 bg-zinc-100" />
+                </div>
 
-              <button
-                type="button"
-                className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:shadow-md"
-              >
-                <svg width="18" height="18" viewBox="0 0 48 48">
-                  <path
-                    fill="#EA4335"
-                    d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                  />
-                  <path
-                    fill="#4285F4"
-                    d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M10.53 28.59a14.5 14.5 0 010-9.18l-7.98-6.19a24.01 24.01 0 000 21.56l7.98-6.19z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                  />
-                </svg>
-                Google
-              </button>
-            </div>
+                <button
+                  type="button"
+                  disabled={googleLoading}
+                  onClick={triggerGoogleLogin}
+                  className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:shadow-md disabled:opacity-60"
+                >
+                  {googleLoading ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-700" />
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 48 48">
+                      <path
+                        fill="#EA4335"
+                        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                      />
+                      <path
+                        fill="#4285F4"
+                        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M10.53 28.59a14.5 14.5 0 010-9.18l-7.98-6.19a24.01 24.01 0 000 21.56l7.98-6.19z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                      />
+                    </svg>
+                  )}
+                  Google
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

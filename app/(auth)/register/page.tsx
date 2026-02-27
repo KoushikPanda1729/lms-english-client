@@ -36,10 +36,12 @@ function RegisterContent() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
+  const [form] = Form.useForm();
   const { setUser } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const emailFromQuery = searchParams.get("email") || "";
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
   const handleRegister = async (values: {
@@ -141,7 +143,14 @@ function RegisterContent() {
         <Divider className="text-xs text-zinc-400">or</Divider>
 
         {/* Register form */}
-        <Form layout="vertical" size="large" requiredMark={false} onFinish={handleRegister}>
+        <Form
+          form={form}
+          layout="vertical"
+          size="large"
+          requiredMark={false}
+          onFinish={handleRegister}
+          initialValues={{ email: emailFromQuery }}
+        >
           <Form.Item
             label={<span className="text-sm font-medium text-zinc-700">Full Name</span>}
             name="name"
