@@ -53,6 +53,8 @@ export function useAudioCall() {
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [speakerOn, setSpeakerOn] = useState(true);
+  const [videoEnabled, setVideoEnabled] = useState(false);
+  const [remoteVideoEnabled, setRemoteVideoEnabled] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -61,6 +63,8 @@ export function useAudioCall() {
   const roomIdRef = useRef<string | null>(null);
   const iceServersRef = useRef<RTCIceServer[]>(FALLBACK_ICE);
   const partnerRef = useRef<PartnerInfo | null>(null);
+  const localVideoStreamRef = useRef<MediaStream | null>(null);
+  const remoteVideoStreamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
   // Resolves when local mic stream is added to the PC — receiver waits on this
@@ -78,6 +82,11 @@ export function useAudioCall() {
   const stopLocalStream = useCallback(() => {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
+    localVideoStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localVideoStreamRef.current = null;
+    remoteVideoStreamRef.current = null;
+    setVideoEnabled(false);
+    setRemoteVideoEnabled(false);
   }, []);
 
   const closePeerConnection = useCallback(() => {
@@ -130,10 +139,21 @@ export function useAudioCall() {
       };
 
       pc.ontrack = (event) => {
-        if (!event.streams?.[0]) return;
-        const stream = event.streams[0];
+        const track = event.track;
+        const stream = event.streams?.[0];
 
-        // Always create a fresh Audio() — bypasses React DOM + autoplay restrictions
+        if (track.kind === "video") {
+          remoteVideoStreamRef.current = stream ?? new MediaStream([track]);
+          setRemoteVideoEnabled(true);
+          track.onended = () => {
+            remoteVideoStreamRef.current = null;
+            setRemoteVideoEnabled(false);
+          };
+          return;
+        }
+
+        // Audio track — bypass React DOM + autoplay restrictions with new Audio()
+        if (!stream) return;
         if (remoteAudioRef.current) {
           remoteAudioRef.current.pause();
           remoteAudioRef.current.srcObject = null;
@@ -142,7 +162,6 @@ export function useAudioCall() {
         audio.srcObject = stream;
         audio.autoplay = true;
         remoteAudioRef.current = audio;
-
         audio.play().catch(() => {
           setAudioBlocked(true);
         });
@@ -403,6 +422,43 @@ export function useAudioCall() {
     setMuted((m) => !m);
   }, []);
 
+  const toggleVideo = useCallback(async () => {
+    const pc = pcRef.current;
+    const socket = socketRef.current;
+    const roomId = roomIdRef.current;
+    if (!pc || !socket || !roomId) return;
+
+    if (!videoEnabled) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const videoTrack = stream.getVideoTracks()[0];
+        localVideoStreamRef.current = stream;
+        pc.addTrack(videoTrack, stream);
+        setVideoEnabled(true);
+        // Renegotiate so peer receives our video track
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit("webrtc_offer", { roomId, sdp: pc.localDescription });
+      } catch {
+        localVideoStreamRef.current?.getTracks().forEach((t) => t.stop());
+        localVideoStreamRef.current = null;
+      }
+    } else {
+      const videoSender = pc.getSenders().find((s) => s.track?.kind === "video");
+      if (videoSender) pc.removeTrack(videoSender);
+      localVideoStreamRef.current?.getTracks().forEach((t) => t.stop());
+      localVideoStreamRef.current = null;
+      setVideoEnabled(false);
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit("webrtc_offer", { roomId, sdp: pc.localDescription });
+      } catch {
+        /* ignore renegotiation errors */
+      }
+    }
+  }, [videoEnabled]);
+
   const resumeAudio = useCallback(() => {
     const audio = remoteAudioRef.current;
     if (!audio) return;
@@ -450,10 +506,15 @@ export function useAudioCall() {
     audioBlocked,
     messages,
     speakerOn,
+    videoEnabled,
+    remoteVideoEnabled,
+    localVideoStreamRef,
+    remoteVideoStreamRef,
     startSearch,
     cancelSearch,
     endCall,
     toggleMute,
+    toggleVideo,
     resumeAudio,
     toggleSpeaker,
     sendMessage,
