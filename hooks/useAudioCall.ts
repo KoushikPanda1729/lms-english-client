@@ -52,6 +52,8 @@ export function useAudioCall() {
   const iceServersRef = useRef<RTCIceServer[]>(FALLBACK_ICE);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
+  // Resolves when local mic stream is added to the PC — receiver waits on this
+  const localMediaReadyRef = useRef<Promise<void>>(Promise.resolve());
 
   // ─── Cleanup ───────────────────────────────────────────────────────────────
 
@@ -88,6 +90,7 @@ export function useAudioCall() {
     socketRef.current = null;
     roomIdRef.current = null;
     pendingCandidates.current = [];
+    localMediaReadyRef.current = Promise.resolve();
     setDuration(0);
   }, [stopTimer, stopLocalStream, closePeerConnection]);
 
@@ -116,13 +119,22 @@ export function useAudioCall() {
       };
 
       pc.ontrack = (event) => {
+        if (!event.streams?.[0]) return;
+        const stream = event.streams[0];
+
+        // Always create a fresh Audio() — bypasses React DOM + autoplay restrictions
         if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = event.streams[0];
-          remoteAudioRef.current.play().catch(() => {
-            // Autoplay blocked by browser — user must tap to resume
-            setAudioBlocked(true);
-          });
+          remoteAudioRef.current.pause();
+          remoteAudioRef.current.srcObject = null;
         }
+        const audio = new Audio();
+        audio.srcObject = stream;
+        audio.autoplay = true;
+        remoteAudioRef.current = audio;
+
+        audio.play().catch(() => {
+          setAudioBlocked(true);
+        });
       };
 
       pc.onconnectionstatechange = () => {
@@ -130,11 +142,12 @@ export function useAudioCall() {
         if (state === "connected") {
           setPhase("connected");
           timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-        } else if (state === "failed" || state === "disconnected") {
+        } else if (state === "failed") {
           setErrorMsg("Connection lost");
           setPhase("ended");
           fullCleanup();
         }
+        // "disconnected" is temporary — let ICE attempt recovery; do not cleanup
       };
 
       pcRef.current = pc;
@@ -178,18 +191,28 @@ export function useAudioCall() {
         setPhase("connecting");
         const pc = createPeerConnection(iceServersRef.current);
 
+        // Store a promise that resolves once local mic tracks are added to the PC.
+        // The receiver's webrtc_offer handler awaits this before answering,
+        // preventing a race where the answer is sent without our audio track.
+        let resolveLocalMedia!: () => void;
+        localMediaReadyRef.current = new Promise<void>((res) => {
+          resolveLocalMedia = res;
+        });
+
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
             },
             video: false,
           });
           localStreamRef.current = stream;
           stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+          resolveLocalMedia(); // tracks are now on the PC
         } catch {
+          resolveLocalMedia(); // unblock even on error so receiver doesn't hang
           setErrorMsg("Microphone access denied. Please allow microphone.");
           setPhase("ended");
           fullCleanup();
@@ -213,6 +236,10 @@ export function useAudioCall() {
         const pc = pcRef.current;
         if (!pc || !sdp) return;
         try {
+          // Wait until our local mic tracks are on the PC before answering.
+          // Without this, the answer is sent before addTrack() runs → caller
+          // never receives our audio track → one-way audio.
+          await localMediaReadyRef.current;
           await pc.setRemoteDescription(new RTCSessionDescription(sdp));
           await addPendingCandidates(pc);
           const answer = await pc.createAnswer();
@@ -348,17 +375,14 @@ export function useAudioCall() {
   }, []);
 
   const resumeAudio = useCallback(() => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current
-        .play()
-        .then(() => setAudioBlocked(false))
-        .catch(() => null);
-    }
-  }, []);
-
-  // Attach remote audio element
-  const setRemoteAudioEl = useCallback((el: HTMLAudioElement | null) => {
-    remoteAudioRef.current = el;
+    const audio = remoteAudioRef.current;
+    if (!audio) return;
+    // load() resets the element state before play — fixes stale/blocked audio
+    audio.load();
+    audio
+      .play()
+      .then(() => setAudioBlocked(false))
+      .catch(() => null);
   }, []);
 
   return {
@@ -373,6 +397,5 @@ export function useAudioCall() {
     endCall,
     toggleMute,
     resumeAudio,
-    setRemoteAudioEl,
   };
 }

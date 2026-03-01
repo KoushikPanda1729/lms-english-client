@@ -82,12 +82,17 @@ function RegisterContent() {
   };
 
   const triggerGoogleLogin = () => {
-    const btn = googleBtnRef.current?.querySelector<HTMLElement>('[role="button"]');
-    if (btn) {
-      btn.click();
-    } else {
-      messageApi.error("Google Sign-In not ready, please try again");
-    }
+    const tryClick = (attempts: number) => {
+      const btn = googleBtnRef.current?.querySelector<HTMLElement>('[role="button"]');
+      if (btn) {
+        btn.click();
+      } else if (attempts > 0) {
+        setTimeout(() => tryClick(attempts - 1), 150);
+      } else {
+        messageApi.error("Google Sign-In not ready, please try again");
+      }
+    };
+    tryClick(8);
   };
 
   return (
@@ -111,10 +116,7 @@ function RegisterContent() {
         <p className="mb-7 text-sm text-zinc-500">Start learning English for free today</p>
 
         {/* Hidden GoogleLogin button */}
-        <div
-          ref={googleBtnRef}
-          style={{ position: "absolute", opacity: 0, height: 0, overflow: "hidden" }}
-        >
+        <div ref={googleBtnRef} style={{ position: "fixed", top: "-9999px", left: "-9999px" }}>
           <GoogleLogin
             onSuccess={(credentialResponse) => {
               if (credentialResponse.credential) {

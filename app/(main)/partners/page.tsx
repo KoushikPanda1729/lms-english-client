@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -43,14 +43,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
     endCall,
     toggleMute,
     resumeAudio,
-    setRemoteAudioEl,
   } = useAudioCall();
-
-  // Hidden audio element for remote audio output
-  const audioRef = useRef<HTMLAudioElement>(null);
-  useEffect(() => {
-    setRemoteAudioEl(audioRef.current);
-  }, [setRemoteAudioEl]);
 
   // Start searching when modal opens
   useEffect(() => {
@@ -72,8 +65,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      {/* hidden remote audio */}
-      <audio ref={audioRef} autoPlay playsInline style={{ display: "none" }} />
+      {/* remote audio is created programmatically via new Audio() inside the hook */}
 
       <div className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 shadow-2xl">
         {/* decorative blobs */}
