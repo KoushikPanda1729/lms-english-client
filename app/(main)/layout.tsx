@@ -17,6 +17,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     if (!loading && !user) {
       const redirect = encodeURIComponent(pathname);
       router.replace(`/login?redirect=${redirect}`);
+    } else if (!loading && user && user.onboardingCompleted === false) {
+      router.replace("/onboarding");
     }
   }, [user, loading, router, pathname]);
 

@@ -6,6 +6,7 @@ export interface AuthUser {
   name: string;
   role: string;
   avatarUrl?: string | null;
+  onboardingCompleted?: boolean;
 }
 
 export const authService = {
