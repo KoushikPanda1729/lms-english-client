@@ -19,8 +19,8 @@ export const authService = {
     return data.data.user as AuthUser;
   },
 
-  async googleSignIn(idToken: string): Promise<AuthUser> {
-    const { data } = await api.post("/auth/google", { idToken });
+  async googleSignIn(accessToken: string): Promise<AuthUser> {
+    const { data } = await api.post("/auth/google", { accessToken });
     return data.data.user as AuthUser;
   },
 

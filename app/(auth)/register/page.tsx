@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useRef, useState, Suspense } from "react";
+import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Checkbox, Divider, Form, Input, message, Spin } from "antd";
 import { LockOutlined, MailOutlined, UserOutlined } from "@ant-design/icons";
-import { GoogleLogin } from "@react-oauth/google";
+import { useGoogleLogin } from "@react-oauth/google";
 import { authService } from "@/lib/services/auth";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -42,7 +42,6 @@ function RegisterContent() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
   const emailFromQuery = searchParams.get("email") || "";
-  const googleBtnRef = useRef<HTMLDivElement>(null);
 
   const handleRegister = async (values: {
     name: string;
@@ -65,10 +64,10 @@ function RegisterContent() {
     }
   };
 
-  const handleGoogleSuccess = async (idToken: string) => {
+  const handleGoogleSuccess = async (accessToken: string) => {
     setGoogleLoading(true);
     try {
-      const user = await authService.googleSignIn(idToken);
+      const user = await authService.googleSignIn(accessToken);
       setUser(user);
       router.replace(redirectTo);
     } catch (err: unknown) {
@@ -81,19 +80,10 @@ function RegisterContent() {
     }
   };
 
-  const triggerGoogleLogin = () => {
-    const tryClick = (attempts: number) => {
-      const btn = googleBtnRef.current?.querySelector<HTMLElement>('[role="button"]');
-      if (btn) {
-        btn.click();
-      } else if (attempts > 0) {
-        setTimeout(() => tryClick(attempts - 1), 150);
-      } else {
-        messageApi.error("Google Sign-In not ready, please try again");
-      }
-    };
-    tryClick(8);
-  };
+  const triggerGoogleLogin = useGoogleLogin({
+    onSuccess: (res) => handleGoogleSuccess(res.access_token),
+    onError: () => messageApi.error("Google sign-in failed"),
+  });
 
   return (
     <>
@@ -115,23 +105,11 @@ function RegisterContent() {
         <h1 className="mb-1 text-2xl font-bold text-zinc-900">Create your account</h1>
         <p className="mb-7 text-sm text-zinc-500">Start learning English for free today</p>
 
-        {/* Hidden GoogleLogin button */}
-        <div ref={googleBtnRef} style={{ position: "fixed", top: "-9999px", left: "-9999px" }}>
-          <GoogleLogin
-            onSuccess={(credentialResponse) => {
-              if (credentialResponse.credential) {
-                handleGoogleSuccess(credentialResponse.credential);
-              }
-            }}
-            onError={() => messageApi.error("Google sign-in failed")}
-          />
-        </div>
-
         {/* Google button */}
         <button
           type="button"
           disabled={googleLoading}
-          onClick={triggerGoogleLogin}
+          onClick={() => triggerGoogleLogin()}
           className="flex h-11 w-full items-center justify-center rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:shadow-md disabled:opacity-60"
         >
           {googleLoading ? (
