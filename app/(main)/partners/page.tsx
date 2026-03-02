@@ -57,6 +57,15 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
 
   const [chatInput, setChatInput] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
+  const [videoRequestDismissed, setVideoRequestDismissed] = useState(false);
+  const [prevRemoteVideoEnabled, setPrevRemoteVideoEnabled] = useState(false);
+
+  // During-render derived state update (React docs recommended pattern — no effect needed)
+  // When partner freshly enables camera, reset the dismissed flag
+  if (prevRemoteVideoEnabled !== remoteVideoEnabled) {
+    setPrevRemoteVideoEnabled(remoteVideoEnabled);
+    if (remoteVideoEnabled) setVideoRequestDismissed(false);
+  }
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -187,7 +196,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
                   ref={remoteVideoRef}
                   autoPlay
                   playsInline
-                  className="absolute inset-0 h-full w-full object-cover"
+                  className="absolute inset-0 h-full w-full bg-black object-contain"
                 />
                 {/* Fallback: partner hasn't enabled video yet */}
                 {!remoteVideoEnabled && (
@@ -270,19 +279,52 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
             )}
           </div>
 
-          {/* ── Video notification: partner turned on camera ── */}
-          {phase === "connected" && remoteVideoEnabled && !videoEnabled && (
-            <div className="mx-5 mb-2 flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 backdrop-blur-sm">
-              <VideoCameraOutlined className="text-lg text-white/60" />
-              <p className="flex-1 text-sm text-white/70">Partner turned on their camera</p>
-              <button
-                onClick={toggleVideo}
-                className="rounded-xl bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-indigo-400 active:scale-95"
+          {/* ── WhatsApp-style video request overlay ── */}
+          {phase === "connected" &&
+            remoteVideoEnabled &&
+            !videoEnabled &&
+            !videoRequestDismissed && (
+              <div
+                className="mx-5 mb-3 overflow-hidden rounded-2xl backdrop-blur-md"
+                style={{
+                  background: "rgba(20,20,45,0.85)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                }}
               >
-                Enable
-              </button>
-            </div>
-          )}
+                <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+                  {/* Avatar / camera icon */}
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500/20">
+                    <VideoCameraOutlined className="text-lg text-emerald-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm leading-tight font-semibold text-white">
+                      {partner?.displayName}
+                    </p>
+                    <p className="mt-0.5 text-xs text-white/45">wants to switch to video</p>
+                  </div>
+                </div>
+                <div className="flex border-t border-white/10">
+                  {/* Decline */}
+                  <button
+                    onClick={() => setVideoRequestDismissed(true)}
+                    className="flex flex-1 items-center justify-center gap-2 border-r border-white/10 py-3 text-sm font-semibold text-red-400 transition hover:bg-white/5 active:scale-95"
+                  >
+                    Decline
+                  </button>
+                  {/* Accept */}
+                  <button
+                    onClick={() => {
+                      toggleVideo();
+                      setVideoRequestDismissed(true);
+                    }}
+                    className="flex flex-1 items-center justify-center gap-2 py-3 text-sm font-semibold text-emerald-400 transition hover:bg-white/5 active:scale-95"
+                  >
+                    <VideoCameraOutlined className="text-base" />
+                    Accept
+                  </button>
+                </div>
+              </div>
+            )}
 
           {/* ── Chat slide-up panel ── */}
           {phase === "connected" && (
@@ -365,15 +407,19 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
                 {/* Video toggle */}
                 <button onClick={toggleVideo} className="flex flex-col items-center gap-1.5">
                   <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-full transition-all ${
-                      videoEnabled ? "bg-white/25 ring-2 ring-white/50" : "bg-white/10"
+                    className={`relative flex h-12 w-12 items-center justify-center rounded-full transition-all ${
+                      videoEnabled ? "bg-white" : "border-2 border-white bg-white/25"
                     }`}
                   >
                     <VideoCameraOutlined
-                      className={`text-[17px] ${videoEnabled ? "text-white" : "text-white/50"}`}
+                      className={`text-[17px] ${videoEnabled ? "text-zinc-800" : "text-white"}`}
                     />
+                    {/* Green dot when partner has video on but ours is off */}
+                    {remoteVideoEnabled && !videoEnabled && (
+                      <span className="absolute -top-1 -right-1 h-3 w-3 animate-pulse rounded-full border-2 border-[#0a0a18] bg-emerald-400" />
+                    )}
                   </div>
-                  <span className="text-[10px] text-white/35">
+                  <span className="text-[10px] text-white/50">
                     {videoEnabled ? "Video on" : "Video"}
                   </span>
                 </button>
@@ -385,17 +431,17 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
                 >
                   <div
                     className={`relative flex h-12 w-12 items-center justify-center rounded-full transition-all ${
-                      chatOpen ? "bg-white/25 ring-2 ring-white/50" : "bg-white/10"
+                      chatOpen ? "bg-white" : "border-2 border-white bg-white/25"
                     }`}
                   >
                     <MessageOutlined
-                      className={`text-[17px] ${chatOpen ? "text-white" : "text-white/50"}`}
+                      className={`text-[17px] ${chatOpen ? "text-zinc-800" : "text-white"}`}
                     />
                     {hasUnread && (
                       <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0a0a18] bg-emerald-400" />
                     )}
                   </div>
-                  <span className="text-[10px] text-white/35">{chatOpen ? "Close" : "Chat"}</span>
+                  <span className="text-[10px] text-white/50">{chatOpen ? "Close" : "Chat"}</span>
                 </button>
               </div>
             )}
@@ -406,16 +452,16 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
               <button onClick={toggleMute} className="flex flex-col items-center gap-2">
                 <div
                   className={`flex h-14 w-14 items-center justify-center rounded-full transition-all ${
-                    muted ? "bg-white/90" : "bg-white/15"
+                    muted ? "bg-white" : "border-2 border-white bg-white/25"
                   }`}
                 >
                   {muted ? (
-                    <AudioMutedOutlined className="text-[20px] text-gray-900" />
+                    <AudioMutedOutlined className="text-[20px] text-zinc-800" />
                   ) : (
                     <AudioOutlined className="text-[20px] text-white" />
                   )}
                 </div>
-                <span className="text-[11px] text-white/35">{muted ? "Unmute" : "Mute"}</span>
+                <span className="text-[11px] text-white/50">{muted ? "Unmute" : "Mute"}</span>
               </button>
 
               {/* End Call */}
@@ -430,14 +476,14 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
               <button onClick={toggleSpeaker} className="flex flex-col items-center gap-2">
                 <div
                   className={`flex h-14 w-14 items-center justify-center rounded-full transition-all ${
-                    speakerOn ? "bg-white/15" : "bg-white/10"
+                    speakerOn ? "bg-white" : "border-2 border-white bg-white/25"
                   }`}
                 >
                   <SoundOutlined
-                    className={`text-[20px] ${speakerOn ? "text-white" : "text-white/25"}`}
+                    className={`text-[20px] ${speakerOn ? "text-zinc-800" : "text-white"}`}
                   />
                 </div>
-                <span className="text-[11px] text-white/35">{speakerOn ? "Speaker" : "Off"}</span>
+                <span className="text-[11px] text-white/50">Speaker</span>
               </button>
             </div>
           </div>
