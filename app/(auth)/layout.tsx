@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Spin } from "antd";
@@ -11,12 +11,17 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Capture redirect URL once on mount — avoids re-running the effect when
+  // searchParams/router change during the navigation itself (which caused an
+  // infinite login ↔ protected-route redirect loop).
+  const redirectRef = useRef(searchParams.get("redirect") || "/dashboard");
+
   useEffect(() => {
     if (!loading && user) {
-      const redirect = searchParams.get("redirect") || "/dashboard";
-      router.replace(redirect);
+      router.replace(redirectRef.current);
     }
-  }, [user, loading, router, searchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loading]); // intentionally omit router/searchParams — run only on auth state change
 
   if (loading) {
     return (

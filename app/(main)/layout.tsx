@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Spin } from "antd";
 import Navbar from "@/components/Navbar";
@@ -13,14 +13,19 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const pathname = usePathname();
 
+  // Keep a ref so the effect always sees the latest pathname for the redirect
+  // URL without re-triggering on every client-side navigation.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+
   useEffect(() => {
     if (!loading && !user) {
-      const redirect = encodeURIComponent(pathname);
-      router.replace(`/login?redirect=${redirect}`);
+      router.replace(`/login?redirect=${encodeURIComponent(pathnameRef.current)}`);
     } else if (!loading && user && !user.onboardingCompleted) {
       router.replace("/onboarding");
     }
-  }, [user, loading, router, pathname]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loading]); // intentionally omit router/pathname — run only on auth state change
 
   // Block render until auth is resolved — prevents dashboard flash
   if (loading || !user || !user.onboardingCompleted) {
