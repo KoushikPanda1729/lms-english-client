@@ -21,10 +21,11 @@ export interface UpdateProfilePayload {
   displayName?: string;
   bio?: string;
   nativeLanguage?: string;
-  englishLevel?: "beginner" | "intermediate" | "advanced";
+  englishLevel?: "beginner" | "elementary" | "intermediate" | "advanced";
   learningGoal?: string;
   country?: string;
   timezone?: string;
+  onboardingCompleted?: boolean;
 }
 
 export const userService = {

@@ -112,13 +112,13 @@ export default function OnboardingPage() {
 
   const handleSubmit = async () => {
     const values = form.getFieldsValue(true);
+    const baseName = user?.name || user?.email?.split("@")[0] || "user";
+    const sanitizedName = baseName.toLowerCase().replace(/[^a-zA-Z0-9_]/g, "");
+    const idSuffix = (user?.id ?? "").replace(/-/g, "").slice(-5);
     const answerList = Object.entries(answers).map(([questionId, selectedIndex]) => ({
       questionId,
       selectedIndex,
     }));
-    const baseName = user?.name || user?.email.split("@")[0] || "user";
-    const sanitizedName = baseName.toLowerCase().replace(/[^a-zA-Z0-9_]/g, "");
-    const idSuffix = (user?.id ?? "").replace(/-/g, "").slice(-5);
 
     setSubmitting(true);
     try {
