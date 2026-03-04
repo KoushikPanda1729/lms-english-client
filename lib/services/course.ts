@@ -83,11 +83,6 @@ export const courseService = {
     return res.data.data;
   },
 
-  async getMyCourses(params?: { page?: number; limit?: number }): Promise<CoursesResponse> {
-    const res = await api.get("/courses/my", { params });
-    return res.data.data;
-  },
-
   async enroll(id: string): Promise<void> {
     await api.post(`/courses/${id}/enroll`);
   },
