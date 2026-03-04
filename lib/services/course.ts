@@ -120,4 +120,34 @@ export const courseService = {
     });
     return res.data.data;
   },
+
+  async getPriceQuote(
+    courseId: string,
+    couponCode?: string,
+  ): Promise<{
+    priceToken: string;
+    price: number;
+    originalPrice: number;
+    discountPercent: number | null;
+    discountAmount: number;
+    currency: string;
+    expiresIn: number;
+  }> {
+    const params = couponCode ? { coupon: couponCode } : undefined;
+    const res = await api.get(`/payments/courses/${courseId}/quote`, { params });
+    return res.data.data;
+  },
+
+  async createCheckout(
+    courseId: string,
+    priceToken: string,
+  ): Promise<{ checkoutUrl: string; sessionId: string }> {
+    const idempotencyKey = crypto.randomUUID();
+    const res = await api.post(
+      `/payments/courses/${courseId}/checkout`,
+      { priceToken },
+      { headers: { "Idempotency-Key": idempotencyKey } },
+    );
+    return res.data.data;
+  },
 };

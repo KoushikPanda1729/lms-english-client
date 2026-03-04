@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, Tag, Divider, Progress, Spin, message, Tooltip } from "antd";
+import { Button, Tag, Divider, Progress, Spin, message } from "antd";
 import {
   ArrowLeftOutlined,
   BookOutlined,
@@ -59,6 +59,22 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     fetchCourse();
   }, [fetchCourse]);
+
+  const handleBuyCourse = async () => {
+    if (!course) return;
+    setEnrolling(true);
+    try {
+      const quote = await courseService.getPriceQuote(course.id);
+      const { checkoutUrl } = await courseService.createCheckout(course.id, quote.priceToken);
+      window.location.href = checkoutUrl;
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to start checkout";
+      messageApi.error(msg);
+      setEnrolling(false);
+    }
+  };
 
   const handleEnroll = async () => {
     if (!course) return;
@@ -345,18 +361,21 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
                   {progress > 0 ? "Continue Learning" : "Start Learning"}
                 </Button>
               ) : isPremium ? (
-                <Tooltip title="Premium course — payment coming soon">
-                  <Button
-                    type="primary"
-                    size="large"
-                    icon={<LockOutlined />}
-                    block
-                    disabled
-                    className="mb-3 h-11 rounded-xl text-sm font-semibold"
-                  >
-                    Buy Course — {priceLabel}
-                  </Button>
-                </Tooltip>
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<LockOutlined />}
+                  block
+                  loading={enrolling}
+                  onClick={handleBuyCourse}
+                  className="mb-3 h-11 rounded-xl text-sm font-semibold shadow-lg shadow-indigo-500/25"
+                  style={{
+                    background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                    border: "none",
+                  }}
+                >
+                  Buy Course — {priceLabel}
+                </Button>
               ) : (
                 <Button
                   type="primary"
