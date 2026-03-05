@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Button, Drawer, Dropdown, Avatar } from "antd";
+import { Button, Drawer, Dropdown, Avatar, Badge, Spin } from "antd";
 import {
   MenuOutlined,
   CloseOutlined,
@@ -11,8 +11,11 @@ import {
   LogoutOutlined,
   DashboardOutlined,
   SettingOutlined,
+  BellOutlined,
+  CheckOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "@/contexts/AuthContext";
+import { notificationService, type AppNotification } from "@/lib/services/notification";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -24,9 +27,79 @@ const navLinks = [
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  const fetchUnreadCount = useCallback(async () => {
+    if (!user) return;
+    try {
+      const count = await notificationService.getUnreadCount();
+      setUnreadCount(count);
+    } catch {
+      /* ignore */
+    }
+  }, [user]);
+
+  const loadNotifications = useCallback(async () => {
+    setNotifLoading(true);
+    try {
+      const res = await notificationService.getMyNotifications(1, 30);
+      setNotifications(res.notifications);
+      setUnreadCount(res.notifications.filter((n) => !n.read).length);
+    } catch {
+      /* ignore */
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  const handleOpenNotifs = useCallback(() => {
+    setNotifOpen(true);
+    loadNotifications();
+  }, [loadNotifications]);
+
+  const handleMarkAsRead = useCallback(async (id: string) => {
+    try {
+      await notificationService.markAsRead(id);
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleMarkAllRead = useCallback(async () => {
+    setMarkingAll(true);
+    try {
+      await notificationService.markAllAsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch {
+      /* ignore */
+    } finally {
+      setMarkingAll(false);
+    }
+  }, []);
+
+  // Poll unread count every 60s when user is logged in
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+    fetchUnreadCount();
+    pollRef.current = setInterval(fetchUnreadCount, 60_000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [user, fetchUnreadCount]);
 
   // Transparent mode only on home page (has dark hero background)
   const isHome = pathname === "/";
@@ -100,6 +173,19 @@ export default function Navbar() {
 
         {/* Desktop auth area */}
         <div className="hidden items-center gap-3 md:flex">
+          {user && (
+            <button
+              onClick={handleOpenNotifs}
+              className={`relative flex h-9 w-9 items-center justify-center rounded-full transition-all ${transparent ? "text-white/80 hover:bg-white/10 hover:text-white" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"}`}
+            >
+              <BellOutlined style={{ fontSize: 18 }} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </button>
+          )}
           {user ? (
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={["click"]}>
               <button
@@ -228,6 +314,74 @@ export default function Navbar() {
           </div>
         </Drawer>
       </nav>
+
+      {/* Notification Drawer */}
+      <Drawer
+        title={
+          <div className="flex items-center justify-between">
+            <span className="text-base font-bold text-zinc-900">Notifications</span>
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                disabled={markingAll}
+                className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-indigo-600 transition hover:bg-indigo-50 disabled:opacity-50"
+              >
+                <CheckOutlined style={{ fontSize: 11 }} />
+                Mark all read
+              </button>
+            )}
+          </div>
+        }
+        placement="right"
+        onClose={() => setNotifOpen(false)}
+        open={notifOpen}
+        width={360}
+        styles={{ body: { padding: 0 } }}
+      >
+        {notifLoading ? (
+          <div className="flex h-40 items-center justify-center">
+            <Spin />
+          </div>
+        ) : notifications.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-zinc-400">
+            <BellOutlined style={{ fontSize: 36 }} />
+            <p className="text-sm">No notifications yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {notifications.map((n) => (
+              <div
+                key={n.id}
+                onClick={() => !n.read && handleMarkAsRead(n.id)}
+                className={`flex cursor-pointer gap-3 px-4 py-3.5 transition-colors hover:bg-zinc-50 ${!n.read ? "bg-indigo-50/50" : ""}`}
+              >
+                {/* Unread dot */}
+                <div className="mt-1.5 flex-shrink-0">
+                  <div
+                    className={`h-2 w-2 rounded-full ${n.read ? "bg-transparent" : "bg-indigo-500"}`}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`text-sm leading-snug ${n.read ? "font-normal text-zinc-700" : "font-semibold text-zinc-900"}`}
+                  >
+                    {n.title}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">{n.body}</p>
+                  <p className="mt-1.5 text-[11px] text-zinc-400">
+                    {new Date(n.createdAt).toLocaleDateString([], {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Drawer>
     </header>
   );
 }
