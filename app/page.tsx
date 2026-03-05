@@ -14,6 +14,7 @@ import {
 import { GoogleLogin } from "@react-oauth/google";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import SupportWidget from "@/components/SupportWidget";
 import { useAuth } from "@/contexts/AuthContext";
 import { authService } from "@/lib/services/auth";
 import { courseService, Course } from "@/lib/services/course";
@@ -604,6 +605,7 @@ export default function Home() {
         <FinalCTA />
       </main>
       <Footer />
+      <SupportWidget />
     </>
   );
 }
