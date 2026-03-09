@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     siteName: "SpeakEasy",
     images: [
       {
-        url: "/og-image.png",
+        url: "/opengraph-image",
         width: 1200,
         height: 630,
         alt: "SpeakEasy — Master English with Real Partners",
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
     title: "SpeakEasy — Master English with Real Partners",
     description:
       "Learn English through interactive courses and live speaking practice with native speakers.",
-    images: ["/og-image.png"],
+    images: ["/opengraph-image"],
   },
 };
 
