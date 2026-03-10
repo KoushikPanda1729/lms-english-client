@@ -144,6 +144,26 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
     setPrevRemoteVideoEnabled(remoteVideoEnabled);
     if (remoteVideoEnabled) setVideoRequestDismissed(false);
   }
+  // Tracks whether both peers were simultaneously on video (used for auto-sync)
+  const wasInMutualVideoRef = useRef(false);
+
+  // Auto-sync: once both were on video, if remote turns off → auto turn off local too
+  useEffect(() => {
+    if (videoEnabled && remoteVideoEnabled) {
+      wasInMutualVideoRef.current = true;
+    } else if (
+      wasInMutualVideoRef.current &&
+      !remoteVideoEnabled &&
+      videoEnabled &&
+      phase === "connected"
+    ) {
+      wasInMutualVideoRef.current = false;
+      toggleVideo();
+    } else if (!videoEnabled && !remoteVideoEnabled) {
+      wasInMutualVideoRef.current = false;
+    }
+  }, [videoEnabled, remoteVideoEnabled, phase, toggleVideo]);
+
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -207,7 +227,9 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
 
   if (!open) return null;
 
-  const showVideo = phase === "connected" && (videoEnabled || remoteVideoEnabled);
+  const isReconnecting = phase === "reconnecting";
+  // Only stay in video layout when BOTH sides have video — if either turns off, switch to audio UI
+  const showVideo = (phase === "connected" || isReconnecting) && videoEnabled && remoteVideoEnabled;
   // Show unread dot only when partner sent a message and chat is closed
   const hasUnread = !chatOpen && messages.some((m) => !m.fromMe);
 
@@ -259,8 +281,8 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
       )}
 
-      {/* ══ CONNECTING / CONNECTED ══ */}
-      {(phase === "connecting" || phase === "connected") && partner && (
+      {/* ══ CONNECTING / CONNECTED / RECONNECTING ══ */}
+      {(phase === "connecting" || phase === "connected" || phase === "reconnecting") && partner && (
         <div ref={containerRef} className="absolute inset-0">
           {/* ── Layer 0: full-screen background ── */}
           {showVideo ? (
@@ -293,7 +315,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-8">
               <div className="relative h-44 w-44">
-                {phase === "connected" && (
+                {(phase === "connected" || isReconnecting) && (
                   <>
                     <span className="absolute -inset-5 animate-ping rounded-full bg-indigo-500/10 [animation-duration:3s]" />
                     <span className="absolute -inset-2.5 animate-ping rounded-full bg-indigo-500/15 [animation-delay:0.6s] [animation-duration:2.5s]" />
@@ -313,11 +335,11 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
                     </div>
                   )}
                 </div>
-                {phase === "connected" && (
+                {phase === "connected" && !isReconnecting && (
                   <span className="absolute right-2.5 bottom-2.5 h-5 w-5 rounded-full border-[3px] border-[#0a0a18] bg-emerald-400 shadow-lg shadow-emerald-500/50" />
                 )}
               </div>
-              {phase === "connected" && (
+              {phase === "connected" && !isReconnecting && (
                 <div className="flex h-10 items-end justify-center gap-0.75">
                   {Array.from({ length: 26 }).map((_, i) => (
                     <span
@@ -340,10 +362,20 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
             {/* Status pill */}
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-black/30 px-3 py-1 ring-1 ring-white/10 backdrop-blur-sm">
               <span
-                className={`h-1.5 w-1.5 rounded-full ${phase === "connected" ? "animate-pulse bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.7)]" : "bg-yellow-400"}`}
+                className={`h-1.5 w-1.5 rounded-full ${
+                  phase === "connected"
+                    ? "animate-pulse bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.7)]"
+                    : phase === "reconnecting"
+                      ? "animate-pulse bg-yellow-400 shadow-[0_0_5px_rgba(250,204,21,0.7)]"
+                      : "bg-yellow-400"
+                }`}
               />
               <span className="text-[10px] font-semibold tracking-widest text-white/70 uppercase">
-                {phase === "connected" ? "Connected" : "Connecting..."}
+                {phase === "connected"
+                  ? "Connected"
+                  : phase === "reconnecting"
+                    ? "Reconnecting..."
+                    : "Connecting..."}
               </span>
             </div>
             {/* Name */}
@@ -354,7 +386,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
               <p className="mt-0.5 text-xs text-white/50 capitalize">{partner.level} Level</p>
             )}
             {/* Timer */}
-            {phase === "connected" && (
+            {phase === "connected" && !isReconnecting && (
               <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-black/35 px-3.5 py-1 ring-1 ring-white/10 backdrop-blur-sm">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
                 <span className="font-mono text-sm font-bold text-white tabular-nums">
@@ -365,7 +397,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
           </div>
 
           {/* ── Layer 2: PiP – draggable + tap to swap ── */}
-          {(swapped ? remoteVideoEnabled : videoEnabled) && (
+          {showVideo && (swapped ? remoteVideoEnabled : videoEnabled) && (
             <div
               className="absolute z-30 h-36 w-24 cursor-pointer touch-none overflow-hidden rounded-2xl border border-white/25 shadow-2xl ring-1 ring-black/20 select-none sm:h-44 sm:w-32"
               style={pipPos ? { left: pipPos.x, top: pipPos.y } : { top: 80, right: 16 }}
@@ -422,7 +454,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
           )}
 
           {/* ── Layer 3: video-request card ── */}
-          {phase === "connected" &&
+          {(phase === "connected" || isReconnecting) &&
             remoteVideoEnabled &&
             !videoEnabled &&
             !videoRequestDismissed && (
@@ -463,7 +495,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
             )}
 
           {/* ── Layer 4: chat sidebar (slides in from right) ── */}
-          {phase === "connected" && (
+          {(phase === "connected" || isReconnecting) && (
             <>
               {/* Backdrop dim on mobile */}
               {chatOpen && (
@@ -631,6 +663,38 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
             </>
           )}
 
+          {/* ── Layer 4b: Reconnecting overlay ── */}
+          {isReconnecting && (
+            <div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/70 backdrop-blur-sm">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-yellow-400/20 ring-2 ring-yellow-400/40">
+                <svg
+                  className="h-8 w-8 animate-spin text-yellow-400"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="text-base font-bold text-white">Reconnecting...</p>
+                <p className="mt-1 text-xs text-white/50">Network issue detected. Please wait.</p>
+              </div>
+            </div>
+          )}
+
           {/* ── Layer 5: bottom control bar ── */}
           <div className="absolute right-0 bottom-0 left-0 z-20 bg-linear-to-t from-black/70 via-black/25 to-transparent px-4 pt-20 pb-8">
             <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-2 rounded-2xl bg-black/50 px-4 py-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl sm:max-w-md sm:gap-3 sm:px-6">
@@ -654,10 +718,16 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
               </button>
 
               {/* Video */}
-              {phase === "connected" && (
+              {(phase === "connected" || isReconnecting) && (
                 <button
-                  onClick={toggleVideo}
-                  className="flex flex-col items-center gap-1 transition active:scale-90"
+                  onClick={() => {
+                    // If turning OFF our own video, suppress the "wants to switch" card
+                    // so it doesn't immediately reappear just because partner is still on video
+                    if (videoEnabled) setVideoRequestDismissed(true);
+                    toggleVideo();
+                  }}
+                  disabled={isReconnecting}
+                  className="flex flex-col items-center gap-1 transition active:scale-90 disabled:opacity-50"
                 >
                   <div
                     className={`relative flex h-12 w-12 items-center justify-center rounded-full transition-all sm:h-13 sm:w-13 ${videoEnabled ? "bg-white shadow-lg" : "bg-white/15 hover:bg-white/25"}`}
@@ -670,7 +740,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
                     )}
                   </div>
                   <span className="text-[9px] font-medium text-white/50">
-                    {videoEnabled ? "Cam on" : "Camera"}
+                    {videoEnabled ? "Video Off" : "Camera"}
                   </span>
                 </button>
               )}
@@ -687,7 +757,7 @@ function AudioCallModal({ open, onClose }: { open: boolean; onClose: () => void 
               </button>
 
               {/* Chat */}
-              {phase === "connected" && (
+              {(phase === "connected" || isReconnecting) && (
                 <button
                   onClick={() => setChatOpen((v) => !v)}
                   className="flex flex-col items-center gap-1 transition active:scale-90"

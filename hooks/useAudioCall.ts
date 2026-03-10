@@ -4,7 +4,14 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { getSocket, disconnectSocket } from "@/lib/socket";
 import type { Socket } from "socket.io-client";
 
-export type CallPhase = "idle" | "searching" | "matched" | "connecting" | "connected" | "ended";
+export type CallPhase =
+  | "idle"
+  | "searching"
+  | "matched"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "ended";
 
 export interface PartnerInfo {
   userId?: string;
@@ -72,6 +79,7 @@ export function useAudioCall() {
   const remoteVideoStreamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const partnerTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCandidates = useRef<RTCIceCandidateInit[]>([]);
   // Resolves when local mic stream is added to the PC — receiver waits on this
   const localMediaReadyRef = useRef<Promise<void>>(Promise.resolve());
@@ -125,6 +133,10 @@ export function useAudioCall() {
       clearTimeout(partnerTypingTimerRef.current);
       partnerTypingTimerRef.current = null;
     }
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
   }, [stopTimer, stopLocalStream, closePeerConnection]);
 
   // Cleanup on unmount
@@ -158,10 +170,13 @@ export function useAudioCall() {
         if (track.kind === "video") {
           remoteVideoStreamRef.current = stream ?? new MediaStream([track]);
           setRemoteVideoEnabled(true);
-          track.onended = () => {
+          const handleVideoOff = () => {
             remoteVideoStreamRef.current = null;
             setRemoteVideoEnabled(false);
           };
+          track.onended = handleVideoOff;
+          // onmute fires in browsers where onended doesn't when track is removed
+          track.onmute = handleVideoOff;
           return;
         }
 
@@ -184,20 +199,44 @@ export function useAudioCall() {
         const state = pc.connectionState;
         if (state === "connected") {
           wasConnectedRef.current = true;
+          // Clear any pending reconnect timer
+          if (reconnectTimerRef.current) {
+            clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
+          }
           setPhase("connected");
-          timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+          // Resume timer if it was stopped during reconnect
+          if (!timerRef.current) {
+            timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+          }
+        } else if (state === "disconnected") {
+          // Temporary network blip — show reconnecting UI and give ICE 15s to recover
+          if (wasConnectedRef.current) {
+            setPhase("reconnecting");
+            // Pause the call timer while reconnecting
+            stopTimer();
+            reconnectTimerRef.current = setTimeout(() => {
+              reconnectTimerRef.current = null;
+              setErrorMsg("Network connection lost. Please try again.");
+              setPhase("ended");
+              fullCleanup();
+            }, 15000);
+          }
         } else if (state === "failed") {
+          if (reconnectTimerRef.current) {
+            clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
+          }
           setErrorMsg("Connection lost");
           setPhase("ended");
           fullCleanup();
         }
-        // "disconnected" is temporary — let ICE attempt recovery; do not cleanup
       };
 
       pcRef.current = pc;
       return pc;
     },
-    [fullCleanup],
+    [fullCleanup, stopTimer],
   );
 
   const addPendingCandidates = useCallback(async (pc: RTCPeerConnection) => {
