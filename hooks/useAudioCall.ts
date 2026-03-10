@@ -213,9 +213,14 @@ export function useAudioCall() {
             timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
           }
         } else if (state === "disconnected") {
-          // Temporary network blip — show reconnecting UI and give ICE 15s to recover
-          if (wasConnectedRef.current) {
+          // Temporary network blip — show reconnecting UI and give ICE 10s to recover
+          if (wasConnectedRef.current && !reconnectTimerRef.current) {
             setPhase("reconnecting");
+            // Play beep to signal reconnecting
+            try {
+              const beep = new Audio("/freesound_community-700-hz-beeps-86815.mp3");
+              beep.play().catch(() => {});
+            } catch {}
             // Pause the call timer while reconnecting
             stopTimer();
             reconnectTimerRef.current = setTimeout(() => {
@@ -223,16 +228,31 @@ export function useAudioCall() {
               setErrorMsg("Network connection lost. Please try again.");
               setPhase("ended");
               fullCleanup();
-            }, 15000);
+            }, 10000);
           }
         } else if (state === "failed") {
-          if (reconnectTimerRef.current) {
-            clearTimeout(reconnectTimerRef.current);
-            reconnectTimerRef.current = null;
+          // If we already started a reconnect timer (from "disconnected"), let it run.
+          // Only end immediately if no timer is active.
+          if (!reconnectTimerRef.current) {
+            if (wasConnectedRef.current) {
+              setPhase("reconnecting");
+              try {
+                const beep = new Audio("/freesound_community-700-hz-beeps-86815.mp3");
+                beep.play().catch(() => {});
+              } catch {}
+              stopTimer();
+              reconnectTimerRef.current = setTimeout(() => {
+                reconnectTimerRef.current = null;
+                setErrorMsg("Network connection lost. Please try again.");
+                setPhase("ended");
+                fullCleanup();
+              }, 10000);
+            } else {
+              setErrorMsg("Connection failed");
+              setPhase("ended");
+              fullCleanup();
+            }
           }
-          setErrorMsg("Connection lost");
-          setPhase("ended");
-          fullCleanup();
         }
       };
 
