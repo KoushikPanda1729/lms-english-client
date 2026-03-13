@@ -37,11 +37,16 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     );
   }
 
+  const isHome = pathname === "/";
+
   return (
     <CallProvider>
       <Navbar />
       <main className="min-h-screen bg-white pt-16 pb-16 md:pb-0">{children}</main>
-      <Footer />
+      {/* Footer: always visible on desktop; on mobile only show on home page */}
+      <div className={!isHome ? "hidden md:block" : undefined}>
+        <Footer />
+      </div>
       <BottomNav />
     </CallProvider>
   );

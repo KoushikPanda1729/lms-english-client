@@ -26,6 +26,7 @@ const navLinks = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [drawerWidth, setDrawerWidth] = useState(378);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
@@ -107,6 +108,14 @@ export default function Navbar() {
     const onScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const update = () =>
+      setDrawerWidth(window.innerWidth < 768 ? Math.round(window.innerWidth * 0.85) : 378);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, []);
 
   const handleLogout = async () => {
@@ -280,8 +289,9 @@ export default function Navbar() {
         placement="right"
         onClose={() => setNotifOpen(false)}
         open={notifOpen}
-        size="default"
-        styles={{ body: { padding: 0 } }}
+        closable={false}
+        maskClosable={true}
+        styles={{ body: { padding: 0 }, wrapper: { width: drawerWidth } }}
       >
         {notifLoading ? (
           <div className="flex h-40 items-center justify-center">
