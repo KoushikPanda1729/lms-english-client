@@ -270,6 +270,8 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const skipDirtyRef = useRef(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const [form] = Form.useForm();
@@ -281,6 +283,7 @@ export default function SettingsPage() {
       .getMe()
       .then((p) => {
         setProfile(p);
+        skipDirtyRef.current = true;
         form.setFieldsValue({
           username: p.username ?? "",
           displayName: p.displayName ?? user?.name ?? "",
@@ -291,6 +294,7 @@ export default function SettingsPage() {
           country: p.country ?? undefined,
           timezone: p.timezone ?? undefined,
         });
+        skipDirtyRef.current = false;
       })
       .catch(() => messageApi.error("Failed to load profile"))
       .finally(() => setLoadingProfile(false));
@@ -319,6 +323,7 @@ export default function SettingsPage() {
         timezone: values.timezone || undefined,
       });
       setProfile(updated);
+      setIsDirty(false);
       messageApi.success("Profile saved!");
     } catch (err: unknown) {
       const msg =
@@ -508,7 +513,12 @@ export default function SettingsPage() {
             <Spin size="large" />
           </div>
         ) : (
-          <div className="bg-zinc-50 px-4 py-5 pb-28">
+          <div
+            className="bg-zinc-50 px-4 py-5 pb-36"
+            onChange={() => {
+              if (!skipDirtyRef.current) setIsDirty(true);
+            }}
+          >
             {(!profile?.username || !profile?.englishLevel) && (
               <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-700">
                 <span>⚠️</span>
@@ -653,18 +663,23 @@ export default function SettingsPage() {
               </div>
 
               {/* Sticky save button */}
-              <div className="fixed right-0 bottom-0 left-0 z-30 border-t border-zinc-100 bg-white/95 px-4 py-3 backdrop-blur-sm">
+              <div className="fixed right-0 bottom-16 left-0 z-30 border-t border-zinc-100 bg-white/95 px-4 py-3 backdrop-blur-sm">
                 <Button
                   type="primary"
                   htmlType="submit"
                   size="large"
                   block
                   loading={saving}
+                  disabled={!isDirty}
                   className="h-12 rounded-xl text-sm font-bold shadow-lg shadow-indigo-500/25"
-                  style={{
-                    background: "linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%)",
-                    border: "none",
-                  }}
+                  style={
+                    isDirty
+                      ? {
+                          background: "linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%)",
+                          border: "none",
+                        }
+                      : undefined
+                  }
                 >
                   Save Changes
                 </Button>
