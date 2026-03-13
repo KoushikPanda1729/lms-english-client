@@ -7,15 +7,14 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/contexts/AuthContext";
-import { CallProvider } from "@/contexts/CallContext";
+import { CallProvider, useCall } from "@/contexts/CallContext";
 
-export default function MainLayout({ children }: { children: React.ReactNode }) {
+function MainLayoutInner({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { callActive } = useCall();
   const router = useRouter();
   const pathname = usePathname();
 
-  // Keep a ref so the effect always sees the latest pathname for the redirect
-  // URL without re-triggering on every client-side navigation.
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
 
@@ -26,9 +25,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       router.replace("/onboarding");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, loading]); // intentionally omit router/pathname — run only on auth state change
+  }, [user, loading]);
 
-  // Block render until auth is resolved — prevents dashboard flash
   if (loading || !user || !user.onboardingCompleted) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -39,16 +37,24 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
 
   const isHome = pathname === "/";
   const isCourseDetail = /^\/courses\/[^/]+$/.test(pathname);
+  const hideBottomNav = isCourseDetail || callActive;
 
   return (
-    <CallProvider>
+    <>
       <Navbar />
       <main className="min-h-screen bg-white pt-16 pb-16 md:pb-0">{children}</main>
-      {/* Footer: always visible on desktop; on mobile only show on home page */}
       <div className={!isHome ? "hidden md:block" : undefined}>
         <Footer />
       </div>
-      {!isCourseDetail && <BottomNav />}
+      {!hideBottomNav && <BottomNav />}
+    </>
+  );
+}
+
+export default function MainLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <CallProvider>
+      <MainLayoutInner>{children}</MainLayoutInner>
     </CallProvider>
   );
 }
