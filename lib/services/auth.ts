@@ -12,22 +12,26 @@ export interface AuthUser {
 export const authService = {
   async register(name: string, email: string, password: string): Promise<AuthUser> {
     const { data } = await api.post("/auth/register", { name, email, password });
-    return data.data.user as AuthUser;
+    const raw = data.data.user;
+    return { ...raw, avatarUrl: raw.profile?.avatarUrl ?? null } as AuthUser;
   },
 
   async login(email: string, password: string): Promise<AuthUser> {
     const { data } = await api.post("/auth/login", { email, password });
-    return data.data.user as AuthUser;
+    const raw = data.data.user;
+    return { ...raw, avatarUrl: raw.profile?.avatarUrl ?? null } as AuthUser;
   },
 
   async googleSignIn(accessToken: string): Promise<AuthUser> {
     const { data } = await api.post("/auth/google", { accessToken });
-    return data.data.user as AuthUser;
+    const raw = data.data.user;
+    return { ...raw, avatarUrl: raw.profile?.avatarUrl ?? null } as AuthUser;
   },
 
   async self(): Promise<AuthUser> {
     const { data } = await api.get("/auth/self");
-    return data.data as AuthUser;
+    const raw = data.data;
+    return { ...raw, avatarUrl: raw.profile?.avatarUrl ?? null } as AuthUser;
   },
 
   async logout(): Promise<void> {

@@ -273,7 +273,7 @@ export default function SettingsPage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const [form] = Form.useForm();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -341,6 +341,7 @@ export default function SettingsPage() {
     try {
       const updated = await userService.uploadAvatar(file);
       setProfile(updated);
+      if (user) setUser({ ...user, avatarUrl: updated.avatarUrl ?? null });
       messageApi.success("Avatar updated!");
     } catch {
       messageApi.error("Failed to upload avatar");
@@ -355,6 +356,7 @@ export default function SettingsPage() {
     try {
       const updated = await userService.deleteAvatar();
       setProfile(updated);
+      if (user) setUser({ ...user, avatarUrl: null });
       messageApi.success("Avatar removed");
     } catch {
       messageApi.error("Failed to remove avatar");

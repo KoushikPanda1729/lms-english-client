@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { authService, AuthUser } from "@/lib/services/auth";
+import { userService } from "@/lib/services/user";
 import { clearOnboardingCookie } from "@/lib/onbCookie";
 
 interface AuthContextValue {
@@ -25,7 +26,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     authService
       .self()
-      .then(setUser)
+      .then(async (u) => {
+        // Fetch profile in parallel to get the signed avatarUrl
+        const profile = await userService.getMe().catch(() => null);
+        setUser({ ...u, avatarUrl: profile?.avatarUrl ?? u.avatarUrl ?? null });
+      })
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);

@@ -12,6 +12,17 @@ import {
   BellOutlined,
   CheckOutlined,
 } from "@ant-design/icons";
+
+function getInitials(name?: string, email?: string): string {
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    return parts.length >= 2
+      ? (parts[0][0] + parts[1][0]).toUpperCase()
+      : parts[0].slice(0, 2).toUpperCase();
+  }
+  if (email) return email[0].toUpperCase();
+  return "U";
+}
 import { useAuth } from "@/contexts/AuthContext";
 import { notificationService, type AppNotification } from "@/lib/services/notification";
 
@@ -198,12 +209,16 @@ export default function Navbar() {
               <button
                 className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 transition-all ${transparent ? "border-white/25 bg-white/15 backdrop-blur-sm hover:bg-white/25" : "border-zinc-200 bg-white hover:border-indigo-300 hover:shadow-sm"}`}
               >
-                <Avatar
-                  size={28}
-                  src={user.avatarUrl}
-                  icon={!user.avatarUrl && <UserOutlined />}
-                  style={{ backgroundColor: "#6366f1" }}
-                />
+                {user.avatarUrl ? (
+                  <Avatar size={28} src={user.avatarUrl} />
+                ) : (
+                  <Avatar
+                    size={28}
+                    style={{ backgroundColor: "#6366f1", fontSize: 11, fontWeight: 700 }}
+                  >
+                    {getInitials(user.name, user.email)}
+                  </Avatar>
+                )}
                 <span
                   className={`max-w-[120px] truncate text-sm font-medium ${transparent ? "text-white" : "text-zinc-700"}`}
                 >
@@ -250,13 +265,26 @@ export default function Navbar() {
           )}
           {user ? (
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={["click"]}>
-              <button className="flex cursor-pointer items-center rounded-full p-0.5 transition-all">
-                <Avatar
-                  size={34}
-                  src={user.avatarUrl}
-                  icon={!user.avatarUrl && <UserOutlined />}
-                  style={{ backgroundColor: "#6366f1" }}
-                />
+              <button className="flex cursor-pointer items-center rounded-full transition-all active:scale-95">
+                {user.avatarUrl ? (
+                  <Avatar
+                    size={38}
+                    src={user.avatarUrl}
+                    style={{ border: "2px solid rgba(255,255,255,0.25)" }}
+                  />
+                ) : (
+                  <Avatar
+                    size={38}
+                    style={{
+                      backgroundColor: "#6366f1",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      border: "2px solid rgba(255,255,255,0.25)",
+                    }}
+                  >
+                    {getInitials(user.name, user.email)}
+                  </Avatar>
+                )}
               </button>
             </Dropdown>
           ) : (
