@@ -391,7 +391,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* ═══════ MOBILE STICKY CTA ═══════ */}
-      <div className="fixed right-0 bottom-16 left-0 z-40 border-t border-zinc-100 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-sm lg:hidden">
+      <div className="fixed right-0 bottom-0 left-0 z-40 border-t border-zinc-100 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-sm lg:hidden">
         <div className="flex items-center gap-3">
           {!enrolled && (
             <div className="min-w-0">

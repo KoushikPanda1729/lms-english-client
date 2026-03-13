@@ -38,6 +38,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   }
 
   const isHome = pathname === "/";
+  const isCourseDetail = /^\/courses\/[^/]+$/.test(pathname);
 
   return (
     <CallProvider>
@@ -47,7 +48,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       <div className={!isHome ? "hidden md:block" : undefined}>
         <Footer />
       </div>
-      <BottomNav />
+      {!isCourseDetail && <BottomNav />}
     </CallProvider>
   );
 }
